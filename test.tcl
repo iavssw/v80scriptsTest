@@ -8,78 +8,126 @@ proc create_hier_cell_RP_Static {nameHier RP_number } {
   # # Create Static Hierarchical cell
   set hier_obj [create_bd_cell -type hier /RP${RP_number}/$nameHier]
 
-  # Calculate the number of NMIs as one less than RP_number
-  set num_nmi [expr {$RP_number - 1}]
-  
-  # Initialize the NMI_TDEST_VALS list with values from 2 to (num_nmi + 1)
-  set nmi_tdest_vals {}
-  for {set i 0} {$i < $num_nmi} {incr i} {
-    lappend nmi_tdest_vals "0x0000000[expr {$i + 4}]" "0x0000000[expr {$i + 4}]"
+  # Check if RP_number is within the allowed range
+  if { $RP_number < 1 || $RP_number >= 34 } {
+      puts "ERROR: RP_number must be between 1 and 33."
+      return
   }
-    
-  # Create instance: axis_noc_0
-  set axis_noc_0 [create_bd_cell -type ip -vlnv xilinx.com:ip:axis_noc:1.0 /RP${RP_number}/${nameHier}/axis_noc_0]
-  # Set properties on the axis_noc_0 instance
+
+  # Set num_low and num_high based on the value of RP_number
+  if { $RP_number < 17 } {
+      set num_low [expr {$RP_number - 1}]
+      set num_high 0
+  } else {
+      set num_low 16
+      set num_high [expr {$RP_number - 17}]
+  }
+
+  # Print: num_low and num_high are now set based on RP_number conditions
+  puts "num_low: $num_low, num_high: $num_high"
+  
+  # Create instance: axis_switch_outputMux, and set properties
+  set axis_switch_outputMux [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 /RP${RP_number}/${nameHier}/axis_switch_outputMux ]
   set_property -dict [list \
-    CONFIG.NUM_NMI $num_nmi \
-    CONFIG.NUM_NSI $num_nmi \
-    CONFIG.SI_DESTID_PINS {1} \
-    CONFIG.TDEST_WIDTH {8} \
-  ] $axis_noc_0
+    CONFIG.M00_AXIS_BASETDEST {0x00000000} \
+    CONFIG.M00_AXIS_HIGHTDEST {0x0000000f} \
+    CONFIG.M01_AXIS_BASETDEST {0x00000010} \
+    CONFIG.M01_AXIS_HIGHTDEST {0x0000001f} \
+    CONFIG.NUM_MI {2} \
+    CONFIG.NUM_SI {1} \
+  ] $axis_switch_outputMux
+
+  # Create instance: axis_noc_inputMux, and set properties
+  set axis_noc_inputMux [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_noc:1.0 /RP${RP_number}/${nameHier}/axis_noc_inputMux ]
+  set_property -dict [list \
+    CONFIG.NUM_NSI {2} \
+    CONFIG.NUM_SI {0} \
+  ] $axis_noc_inputMux
 
   set_property -dict [ list \
+   CONFIG.TDEST_WIDTH {0} \
+   CONFIG.TID_WIDTH {0} \
+   CONFIG.CATEGORY {pl} \
+  ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/M00_AXIS]
+
+  set_property -dict [ list \
+   CONFIG.CONNECTIONS {M00_AXIS { write_bw {500} write_avg_burst {4}}} \
+   CONFIG.DEST_IDS {} \
+  ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/S00_INIS]
+
+  set_property -dict [ list \
+   CONFIG.CONNECTIONS {M00_AXIS { write_bw {500} write_avg_burst {4}}} \
+   CONFIG.DEST_IDS {} \
+  ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/S01_INIS]
+
+  set_property -dict [ list \
+   CONFIG.ASSOCIATED_BUSIF {M00_AXIS} \
+  ] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/aclk0]
+  
+  # Create instance: axis_noc_low
+  set axis_noc_low [create_bd_cell -type ip -vlnv xilinx.com:ip:axis_noc:1.0 /RP${RP_number}/${nameHier}/axis_noc_low]
+  # Set properties on the axis_noc_low instance
+  set_property -dict [list \
+    CONFIG.NUM_MI {0} \
+    CONFIG.NUM_NMI [expr {$num_low + 1}] \
+    CONFIG.NUM_NSI $num_low \
+    CONFIG.SI_DESTID_PINS {1} \
     CONFIG.TDEST_WIDTH {8} \
-    CONFIG.TID_WIDTH {0} \
-    CONFIG.CATEGORY {pl} \
-  ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/M00_AXIS]
+  ] $axis_noc_low
+
+  # set_property -dict [ list \
+  #   CONFIG.TDEST_WIDTH {8} \
+  #   CONFIG.TID_WIDTH {0} \
+  #   CONFIG.CATEGORY {pl} \
+  # ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/M00_AXIS]
 
   set_property -dict [ list \
     CONFIG.TDEST_WIDTH {8} \
     CONFIG.TID_WIDTH {0} \
     CONFIG.DEST_IDS {} \
     CONFIG.CATEGORY {pl} \
-  ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/S00_AXIS]
+  ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/S00_AXIS]
 
   # Initialize an empty string for the nested CONFIG.CONNECTIONS structure
   set connections_axis_list ""
   # Loop to build the nested CONNECTIONS list based on num_nmi
-  for {set i 0} {$i < $num_nmi} {incr i} {
+  for {set i 0} {$i < $num_low} {incr i} {
     # Format the index to always be two digits
-    set formatted_index [format "%02d" $i]
+    set formatted_index [format "%02d" [expr {$i + 1}]]
     # Append each INIS connection in a nested format with bandwidth settings
     append connections_axis_list "M${formatted_index}_INIS { write_bw {500}} "
   }
   # Apply the dynamically created CONNECTIONS list to the S00_AXIS interface
-  set_property -dict [list CONFIG.CONNECTIONS $connections_axis_list] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/S00_AXIS]
+  set_property -dict [list CONFIG.CONNECTIONS $connections_axis_list] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/S00_AXIS]
 
   # Loop to set the CONNECTIONS for each SINIS interface to the M_AXIS
-  for {set i 0} {$i < $num_nmi} {incr i} {
+  for {set i 0} {$i < $num_low} {incr i} {
     # Format the index to always be two digits
     set formatted_index [format "%02d" $i]
     # Set the CONNECTIONS for each SINIS interface to the M_AXIS
-    set_property -dict [list CONFIG.CONNECTIONS {M00_AXIS { write_bw {500} write_avg_burst {4}}}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/S${formatted_index}_INIS]
+    set_property -dict [list CONFIG.CONNECTIONS {M00_INIS { write_bw {500} }}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/S${formatted_index}_INIS]
   }
 
-  # Initialize the NMI_TDEST_VALS list with values starting from 1
-  set nmi_tdest_vals ""
-  for {set i 0} {$i < $num_nmi} {incr i} {
+  # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
+  set nmi_tdest_vals "," 
+  for {set i 0} {$i < $num_low} {incr i} {
     # Format the hex value with leading zeros
     set formatted_hex [format "0x%08X" [expr {$i + 1}]]
     # Append each formatted hex value pair, separated by a comma
     append nmi_tdest_vals "$formatted_hex $formatted_hex"
     
     # Add a comma separator after each pair, except the last one
-    if { $i < $num_nmi - 1 } {
+    if { $i < $num_low - 1 } {
       append nmi_tdest_vals ","
     }
   }
 
-  # Set the NMI_TDEST_VALS property on the axis_noc_0 instance with quotes
-  set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /RP${RP_number}/${nameHier}/axis_noc_0]
+  # Set the NMI_TDEST_VALS property on the axis_noc_low instance with quotes
+  set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /RP${RP_number}/${nameHier}/axis_noc_low]
 
   set_property -dict [list \
-    CONFIG.ASSOCIATED_BUSIF {M00_AXIS:S00_AXIS} \
-  ] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_0/aclk0]
+    CONFIG.ASSOCIATED_BUSIF {S00_AXIS} \
+  ] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_low/aclk0]
 
   # Create instance: dfx_decoupler_0 and set properties
   set dfx_decoupler_0 [create_bd_cell -type ip -vlnv xilinx.com:ip:dfx_decoupler:1.0 /RP${RP_number}/${nameHier}/dfx_decoupler_0]
@@ -98,39 +146,46 @@ proc create_hier_cell_RP_Static {nameHier RP_number } {
   create_bd_pin -dir I /RP${RP_number}/${nameHier}/rp_decouple
 
   # Loop to create and connect master and slave INIS pins for axis_noc based on num_nmi
-  for {set i 0} {$i < $num_nmi} {incr i} {
+  for {set i 0} {$i < $num_low} {incr i} {
     # Format pin names dynamically based on index
-    set formatted_index [format "%02d" $i]
-    set master_inis_pin "M${formatted_index}_INIS"
-    set slave_inis_pin "S${formatted_index}_INIS"
+    set formatted_index0 [format "%02d" $i]
+    set formatted_index1 [format "%02d" [expr {$i + 1}]]
+    set master_inis_pin "M${formatted_index1}_INIS"
+    set slave_inis_pin_intern "S${formatted_index0}_INIS"
+    set slave_inis_pin_extern "S${formatted_index1}_INIS"
 
     # Create master and slave INIS interface pins dynamically
     create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${RP_number}/${nameHier}/$master_inis_pin
-    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${RP_number}/${nameHier}/$slave_inis_pin
+    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${RP_number}/${nameHier}/$slave_inis_pin_extern
 
     # Connect each master INIS pin to the corresponding axis_noc master interface pin
-    set master_intf_net "axis_noc_0_${master_inis_pin}_conn"
-    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/${master_inis_pin}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/$master_inis_pin]
+    set master_intf_net "axis_noc_low_${master_inis_pin}_conn"
+    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/${master_inis_pin}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/$master_inis_pin]
 
     # Connect each slave INIS pin to the corresponding axis_noc slave interface pin
-    set slave_intf_net "axis_noc_0_${slave_inis_pin}_conn"
-    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/${slave_inis_pin}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/$slave_inis_pin]
+    set slave_intf_net "axis_noc_low_${slave_inis_pin_extern}_conn"
+    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/${slave_inis_pin_intern}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/$slave_inis_pin_extern]
   }
 
-  # connect external to noc to decoupler to rp_dfx
+  # connect axis_switch_outputMux to axis_noc_low
+  connect_bd_intf_net -intf_net axis_switch2low [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/M00_AXIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/S00_AXIS]
+  # connect axis_noc_low to axis_noc_inputMux
+  connect_bd_intf_net -intf_net axis_low2noc [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/M00_INIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/S00_INIS]
+
+  # connect switch and noc to decoupler rp_dfx
   # Create interface pins
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/rp_sout2rp2n
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/rp_n2rp2sin
   #connect path of input stream
-  connect_bd_intf_net -intf_net n2dcp [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/M00_AXIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/s_n2rp2sin]
+  connect_bd_intf_net -intf_net n2dcp [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/M00_AXIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/s_n2rp2sin]
   connect_bd_intf_net -intf_net dcp2dfx [get_bd_intf_pins /RP${RP_number}/${nameHier}/rp_n2rp2sin] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/rp_n2rp2sin]
   #connect path of output stream
-  connect_bd_intf_net -intf_net dcp2n [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/s_sout2rp2n] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_0/S00_AXIS]
+  connect_bd_intf_net -intf_net dcp2n [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/s_sout2rp2n] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/S00_AXIS]
   connect_bd_intf_net -intf_net dcp2dfx2 [get_bd_intf_pins /RP${RP_number}/${nameHier}/rp_sout2rp2n] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/rp_sout2rp2n]
 
   # Connect ctr and clk pins 
-  connect_bd_net -net clk [get_bd_pins /RP${RP_number}/${nameHier}/rp_clk] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/sout2rp2n_aclk] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/n2rp2sin_aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_0/aclk0]
-  connect_bd_net -net aresetn [get_bd_pins /RP${RP_number}/${nameHier}/rp_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/sout2rp2n_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/n2rp2sin_arstn]
+  connect_bd_net -net clk [get_bd_pins /RP${RP_number}/${nameHier}/rp_clk] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/sout2rp2n_aclk] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/n2rp2sin_aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_low/aclk0] [get_bd_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/aclk0]
+  connect_bd_net -net aresetn [get_bd_pins /RP${RP_number}/${nameHier}/rp_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/sout2rp2n_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/n2rp2sin_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/aresetn]
   connect_bd_net -net decouple [get_bd_pins /RP${RP_number}/${nameHier}/rp_decouple] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/decouple]
 
 }
@@ -144,26 +199,6 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
 
   set RPname "${nameHier}${RP_number}"
 
-  # # Get object for parentCell
-  # set parentObj [get_bd_cells $parentCell]
-  # if { $parentObj == "" } {
-  #    catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
-  #    return
-  # }
-
-  # # Make sure parentObj is hier blk
-  # set parentType [get_property TYPE $parentObj]
-  # if { $parentType ne "hier" } {
-  #    catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
-  #    return
-  # }
-
-  # # Save current instance; Restore later
-  # set oldCurInst [current_bd_instance .]
-
-  # Set parent object as current
-  # current_bd_instance $parentObj
-
   # Create cell and set as current instance
   set hier_obj [create_bd_cell -type hier /$RPname]
 
@@ -175,7 +210,7 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
   # Create interface pins based on RP_number
   for {set i 0} {$i < ($RP_number - 1)} {incr i} {
     # Format pin names dynamically based on index
-    set formatted_index [format "%02d" $i]
+    set formatted_index [format "%02d" [expr {$i + 1}]]
     set master_inis_pin "M${formatted_index}_INIS"
     set slave_inis_pin "S${formatted_index}_INIS"
 
@@ -196,7 +231,7 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
   # Loop to create and connect master and slave INIS pins for top level based on RP_number
   for {set i 0} {$i < ($RP_number - 1)} {incr i} {
     # Format pin names dynamically based on index
-    set formatted_index [format "%02d" $i]
+    set formatted_index [format "%02d" [expr {$i + 1}]]
     set master_inis_pin "M${formatted_index}_INIS"
     set slave_inis_pin "S${formatted_index}_INIS"
 
@@ -213,6 +248,17 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
   connect_bd_net -net clk [get_bd_pins /$RPname/aclk] [get_bd_pins /$RPname/$RPStaticName/rp_clk] 
   connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/rp_arstn] 
   connect_bd_net -net decouple [get_bd_pins /$RPname/decouple] [get_bd_pins /$RPname/$RPStaticName/rp_decouple] 
+
+
+
+
+
+
+
+
+
+
+  
 
   # # Create instance: RP{RP_number}_DFX
   # create_hier_cell_RP_DFX $hier_obj RP${RP_number}_DFX $RP_number
@@ -234,4 +280,4 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
   # current_bd_instance $oldCurInst
 }
 
-create_hier_cell_RPtop RP 27 
+create_hier_cell_RPtop RP 3
