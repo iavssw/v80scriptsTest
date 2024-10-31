@@ -279,6 +279,83 @@ proc create_hier_cell_RP_Static {nameHier RP_number } {
 
 }
 
+proc create_hier_cell_RP_DFX { nameHier RP_number } {
+
+  if { $nameHier eq "" || $RP_number eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP1_Static() - Empty argument(s)!"}
+     return
+  }
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier /RP${RP_number}/$nameHier]
+  current_bd_instance $hier_obj
+
+  # Create interface pins
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inimm_rtl:1.0 /RP${RP_number}/${nameHier}/M00_INI
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inimm_rtl:1.0 /RP${RP_number}/${nameHier}/S00_INI
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/input_stream
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/output_stream
+
+  # Create pins
+  create_bd_pin -dir I -type clk /RP${RP_number}/${nameHier}/aclk
+  create_bd_pin -dir I -type rst /RP${RP_number}/${nameHier}/aresetn
+
+  # Create instance: rmBase_0, and set properties
+  set rmBase_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rmBase:1.1 /RP${RP_number}/${nameHier}/rmBase_0 ]
+
+###########################################################################################################################################################################  
+
+  # Create instance: axi_noc_0, and set properties
+  set axi_noc_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_noc:1.1 /RP${RP_number}/${nameHier}/axi_noc_0 ]
+  set_property -dict [list \
+    CONFIG.MI_NAMES {} \
+    CONFIG.MI_SIDEBAND_PINS {} \
+    CONFIG.NUM_MI {1} \
+    CONFIG.NUM_NMI {1} \
+    CONFIG.NUM_NSI {1} \
+  ] $axi_noc_0
+
+  set_property -dict [ list \
+   CONFIG.APERTURES {{0x201_8000_0000 1G}} \
+   CONFIG.CATEGORY {pl} \
+ ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/M00_AXI]
+
+  set_property -dict [ list \
+   CONFIG.CONNECTIONS {M00_INI {read_bw {500} write_bw {500}}} \
+   CONFIG.DEST_IDS {} \
+   CONFIG.NOC_PARAMS {} \
+   CONFIG.CATEGORY {pl} \
+ ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_AXI]
+
+  set_property -dict [ list \
+   CONFIG.CONNECTIONS {M00_AXI {read_bw {500} write_bw {500} read_avg_burst {4} write_avg_burst {4}}} \
+ ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_INI]
+
+  set_property -dict [ list \
+   CONFIG.ASSOCIATED_BUSIF {M00_AXI:S00_AXI} \
+ ] [get_bd_pins /RP${RP_number}/${nameHier}/axi_noc_0/aclk0]
+
+###########################################################################################################################################################################  
+
+  # Create instance: smartconnect_0, and set properties
+  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 /RP${RP_number}/${nameHier}/smartconnect_0 ]
+  set_property CONFIG.NUM_SI {1} $smartconnect_0
+
+  # Create interface connections
+  connect_bd_intf_net -intf_net Conn1 [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/input_stream] [get_bd_intf_pins /RP${RP_number}/${nameHier}/input_stream]
+  connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/output_stream] [get_bd_intf_pins /RP${RP_number}/${nameHier}/output_stream]
+  connect_bd_intf_net -intf_net S00_INI_1 [get_bd_intf_pins /RP${RP_number}/${nameHier}/S00_INI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_INI]
+  connect_bd_intf_net -intf_net axi_noc_0_M00_AXI [get_bd_intf_pins /RP${RP_number}/${nameHier}/smartconnect_0/S00_AXI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/M00_AXI]
+  connect_bd_intf_net -intf_net axi_noc_0_M00_INI [get_bd_intf_pins /RP${RP_number}/${nameHier}/M00_INI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/M00_INI]
+  connect_bd_intf_net -intf_net rmBase_0_m_axi_DATA_BUS_ADDR [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/m_axi_DATA_BUS_ADDR] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_AXI]
+  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins /RP${RP_number}/${nameHier}/smartconnect_0/M00_AXI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/s_axi_CTRL_BUS]
+
+  # Create port connections
+  connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins /RP${RP_number}/${nameHier}/aclk] [get_bd_pins /RP${RP_number}/${nameHier}/smartconnect_0/aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axi_noc_0/aclk0] [get_bd_pins /RP${RP_number}/${nameHier}/rmBase_0/ap_clk]
+  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins /RP${RP_number}/${nameHier}/aresetn] [get_bd_pins /RP${RP_number}/${nameHier}/smartconnect_0/aresetn] [get_bd_pins /RP${RP_number}/${nameHier}/rmBase_0/ap_rst_n]
+
+}
+
 proc create_hier_cell_RPtop { nameHier RP_number } {
 
   if { $nameHier eq "" || $RP_number eq "" } {
@@ -293,7 +370,6 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
 
   # Create interface pins
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inimm_rtl:1.0 /$RPname/M00_INI
-
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inimm_rtl:1.0 /$RPname/S00_INI
 
   # Create interface pins based on RP_number
@@ -313,9 +389,12 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
   create_bd_pin -dir I -type rst /$RPname/aresetn
   create_bd_pin -dir I /$RPname/decouple
 
-  # Create instance: RP{RP_number}_Static
+###########################################################################################################################################################################    
+
   set RPStaticName "RP${RP_number}_static"
   create_hier_cell_RP_Static $RPStaticName $RP_number
+
+###########################################################################################################################################################################  
 
   #Loop to create and connect master and slave INIS pins for top level based on RP_number
   for {set i 0} {$i < ($RP_number - 1)} {incr i} {
@@ -333,40 +412,25 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
     connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/${slave_inis_pin}] [get_bd_intf_pins /$RPname/$slave_inis_pin]
   }
 
-  # Connect ctr and clk pins 
-  connect_bd_net -net clk [get_bd_pins /$RPname/aclk] [get_bd_pins /$RPname/$RPStaticName/rp_clk] 
-  connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/rp_arstn] 
+  # Connect decouple pins 
   connect_bd_net -net decouple [get_bd_pins /$RPname/decouple] [get_bd_pins /$RPname/$RPStaticName/rp_decouple] 
 
+###########################################################################################################################################################################  
 
+  set RPDFXName "RP${RP_number}_DFX"
+  create_hier_cell_RP_DFX $RPDFXName $RP_number
 
+###########################################################################################################################################################################  
 
+  connect_bd_intf_net -intf_net S00_INI [get_bd_intf_pins /$RPname/S00_INI] [get_bd_intf_pins /$RPname/$RPDFXName/S00_INI]
+  connect_bd_intf_net -intf_net M00_INI [get_bd_intf_pins /$RPname/M00_INI] [get_bd_intf_pins /$RPname/$RPDFXName/M00_INI]
 
+  connect_bd_intf_net -intf_net input_dfx2static [get_bd_intf_pins /$RPname/$RPStaticName/rp_n2rp2sin] [get_bd_intf_pins /$RPname/$RPDFXName/input_stream]
+  connect_bd_intf_net -intf_net output_dfx2static [get_bd_intf_pins /$RPname/$RPStaticName/rp_sout2rp2n] [get_bd_intf_pins /$RPname/$RPDFXName/output_stream]
 
-
-
-
-
-  
-
-  # # Create instance: RP{RP_number}_DFX
-  # create_hier_cell_RP_DFX $hier_obj RP${RP_number}_DFX $RP_number
-
-  # Create interface connections
-  # connect_bd_intf_net -intf_net RP${RP_number}_Static_M00_INIS [get_bd_intf_pins M00_INIS] [get_bd_intf_pins RP${RP_number}_Static/M00_INIS]
-  # connect_bd_intf_net -intf_net S00_INIS_${RP_number} [get_bd_intf_pins S00_INIS] [get_bd_intf_pins RP${RP_number}_Static/S00_INIS]
-  # connect_bd_intf_net -intf_net S00_INI_${RP_number} [get_bd_intf_pins S00_INI] [get_bd_intf_pins RP${RP_number}_DFX/S00_INI]
-  # connect_bd_intf_net -intf_net dfx_decoupler_${RP_number}_rp_n2rp_s [get_bd_intf_pins RP${RP_number}_Static/rp_n2rp_s] [get_bd_intf_pins RP${RP_number}_DFX/input_stream]
-  # connect_bd_intf_net -intf_net tile${RP_number}_M00_INI [get_bd_intf_pins M00_INI] [get_bd_intf_pins RP${RP_number}_DFX/M00_INI]
-  # connect_bd_intf_net -intf_net tile${RP_number}_output_stream [get_bd_intf_pins RP${RP_number}_Static/rp_rp2n_m] [get_bd_intf_pins RP${RP_number}_DFX/output_stream]
-
-  # # Create port connections
-  # connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins aclk] [get_bd_pins RP${RP_number}_DFX/aclk] [get_bd_pins RP${RP_number}_Static/rp2n_m_aclk]
-  # connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins aresetn] [get_bd_pins RP${RP_number}_DFX/aresetn] [get_bd_pins RP${RP_number}_Static/n2rp_s_arstn]
-  # connect_bd_net -net static_region_Dout [get_bd_pins decouple] [get_bd_pins RP${RP_number}_Static/decouple]
-
-  # # Restore current instance
-  # current_bd_instance $oldCurInst
+  # Connect clk and reset pins 
+  connect_bd_net -net clk [get_bd_pins /$RPname/aclk] [get_bd_pins /$RPname/$RPStaticName/rp_clk] [get_bd_pins /$RPname/$RPDFXName/aclk] 
+  connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/rp_arstn] [get_bd_pins /$RPname/$RPDFXName/aresetn] 
 }
 
-create_hier_cell_RPtop RP 3
+create_hier_cell_RPtop RP 1
