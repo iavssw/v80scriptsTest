@@ -1,0 +1,12 @@
+#
+# An unexpected error has occurred (11)
+#
+Stack:
+/mnt/sdb1/Xilinx/Vivado/2024.1/tps/lnx64/jre21.0.1_12/lib//server/libjvm.so(+0xe4f55c) [0x7f00dbe1f55c]
+/mnt/sdb1/Xilinx/Vivado/2024.1/tps/lnx64/jre21.0.1_12/lib//server/libjvm.so(JVM_handle_linux_signal+0x23e) [0x7f00dbe2002e]
+/lib/x86_64-linux-gnu/libc.so.6(+0x43090) [0x7f011b5ea090]
+/mnt/sdb1/Xilinx/Vivado/2024.1/lib/lnx64.o/librdi_coregen.so(HRSBMoDesign::getFullName[abi:cxx11]() const+0x164) [0x7f0108986494]
+/mnt/sdb1/Xilinx/Vivado/2024.1/lib/lnx64.o/librdi_coregen.so(HRSBMoNamedObject::getFullName[abi:cxx11]() const+0x92) [0x7f0108ccc3a2]
+/mnt/sdb1/Xilinx/Vivado/2024.1/lib/lnx64.o/librdi_coregen.so(HRSBMoNamedObject::getFullName[abi:cxx11]() const+0x92) [0x7f0108ccc3a2]
+/mnt/sdb1/Xilinx/Vivado/2024.1/lib/lnx64.o/librdi_rsb.so(Java_ui_data_rsbi_RSBBlockPort_1getFullName+0x49) [0x7f00f5e70999]
+[0x7f00cb8a5cea]
