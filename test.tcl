@@ -24,21 +24,32 @@ proc create_hier_cell_RP_Static {nameHier RP_number } {
   }
 
   # Print: num_low and num_high are now set based on RP_number conditions
-  puts "num_low: $num_low, num_high: $num_high"
+  puts "Creating RP${RP_number} with num_low: $num_low, num_high: $num_high"
   
 ###########################################################################################################################################################################
 
   # Create instance: axis_switch_outputMux, and set properties
   set axis_switch_outputMux [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 /RP${RP_number}/${nameHier}/axis_switch_outputMux ]
-  set_property -dict [list \
+  if {$RP_number < 17} {
+    set_property -dict [list \
+    CONFIG.M00_AXIS_BASETDEST {0x00000000} \
+    CONFIG.M00_AXIS_HIGHTDEST {0x00000010} \
+    CONFIG.M01_AXIS_BASETDEST {0x00000011} \
+    CONFIG.M01_AXIS_HIGHTDEST {0x0000001f} \
+    CONFIG.NUM_MI {2} \
+    CONFIG.NUM_SI {1} \
+    ] $axis_switch_outputMux
+  } else {
+    set_property -dict [list \
     CONFIG.M00_AXIS_BASETDEST {0x00000000} \
     CONFIG.M00_AXIS_HIGHTDEST {0x0000000f} \
     CONFIG.M01_AXIS_BASETDEST {0x00000010} \
     CONFIG.M01_AXIS_HIGHTDEST {0x0000001f} \
     CONFIG.NUM_MI {2} \
     CONFIG.NUM_SI {1} \
-  ] $axis_switch_outputMux
-
+    ] $axis_switch_outputMux
+  }
+  
   # Create instance: axis_noc_inputMux, and set properties
   set axis_noc_inputMux [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_noc:1.0 /RP${RP_number}/${nameHier}/axis_noc_inputMux ]
   set_property -dict [list \
@@ -436,8 +447,8 @@ proc create_hier_cell_RPtop { nameHier RP_number } {
 proc updateStaticRegion { nameHier RP_number } {
 
   if { $nameHier eq "" || $RP_number eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
-     return
+    catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
+    return
   }
 
   set RPname "${nameHier}${RP_number}"
@@ -449,8 +460,8 @@ proc updateStaticRegion { nameHier RP_number } {
 
   # Check if the object was found
   if { $axi_noc_cips eq "" } {
-      puts "ERROR: Could not find the object /static_region/axi_noc_cips."
-      return
+    puts "ERROR: Could not find the object /static_region/axi_noc_cips."
+    return
   }
 
   # Query the current values of NUM_NMI and NUM_NSI
@@ -465,8 +476,8 @@ proc updateStaticRegion { nameHier RP_number } {
 
   # Apply the updated configuration with incremented values using -dict
   set_property -dict [list \
-      CONFIG.NUM_NMI $new_num_nmi \
-      CONFIG.NUM_NSI $new_num_nsi \
+    CONFIG.NUM_NMI $new_num_nmi \
+    CONFIG.NUM_NSI $new_num_nsi \
   ] $axi_noc_cips
 
   # Format the number with zero-padding for zero index
@@ -525,12 +536,219 @@ proc updateStaticRegion { nameHier RP_number } {
 
 }
 
+proc updateRPregions { nameHier RP_number } {
+  if { $nameHier eq "" || $RP_number eq "" } {
+    catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
+    return
+  }
+
+  # Set num_low and num_high based on the value of RP_number
+  if { $RP_number < 17 } {
+    set num_low [expr {$RP_number - 1}]
+    set num_high 0
+  } else {
+    set num_low 15
+    set num_high [expr {$RP_number - 1 - 15}]
+  }
+
+  #do not update the the RP just created
+  for {set i 1} {$i < $RP_number} {incr i} {
+  # for {set i 17} {$i < 18} {incr i}
+    puts "Updating RP Static Region $i"
+
+    #update low for lower half of RP
+    if { $RP_number < 17 } {
+      set current_low_num_nmi [get_property CONFIG.NUM_NMI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]]
+      set current_low_num_nsi [get_property CONFIG.NUM_NSI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]]      
+
+      set new_low_num_nmi [expr {$current_low_num_nmi + 1}]
+      set new_low_num_nsi [expr {$current_low_num_nsi + 1}]
+
+      #safty check
+      if {($new_low_num_nmi < 17) && ($new_low_num_nsi < 17) || 1} {
+        # puts "Current Low NUM_NMI: $current_low_num_nmi, Current Low NUM_NSI: $current_low_num_nsi"
+        # puts "New Low NUM_NMI: $new_low_num_nmi, New Low NUM_NSI: $new_low_num_nsi"
+
+        # Apply the updated configuration with incremented values using -dict
+        set_property -dict [list \
+          CONFIG.NUM_NMI $new_low_num_nmi \
+          CONFIG.NUM_NSI $new_low_num_nsi \
+        ] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]        
+
+        # output steam: Format the number with zero-padding for zero index
+        set formatted_indexM [format "%02d" [expr {$new_low_num_nmi - 1}]]
+        set MINIS_name "M${formatted_indexM}_INIS"
+        set current_connectionsS [get_property CONFIG.CONNECTIONS [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/S00_AXIS]]
+        lappend current_connectionsS $MINIS_name {read_bw {500} write_bw {500}}
+        set_property -dict [list CONFIG.CONNECTIONS $current_connectionsS] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/S00_AXIS]
+        
+        # input stream: Format the number with zero-padding for zero index
+        set formatted_indexS [format "%02d" [expr {$new_low_num_nsi - 1}]]
+        set SINIS_name "S${formatted_indexS}_INIS"
+        set_property -dict [list CONFIG.CONNECTIONS {M00_INIS { write_bw {500} }}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/$SINIS_name] 
+
+        # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
+        set nmi_tdest_vals "," 
+        # +1 to skip itself
+        set skip 0
+        if {$i < 17} {
+          set skip 1
+        }
+        # +1 to start from 1
+        for {set j 1} {$j < ($num_low + $skip + 1)} {incr j} {
+          # skip itself
+          if { $j != $i} {
+            # Format the hex value with leading zeros
+            set formatted_hex [format "0x%08X" [expr {$j}]]
+
+            # Append each formatted hex value pair, separated by a comma
+            append nmi_tdest_vals "$formatted_hex $formatted_hex"
+
+            # Add a comma separator after each pair, except the last one
+            if { $j < ($num_low + $skip) } {
+              append nmi_tdest_vals ","
+            }
+          }
+        }
+        # puts "L NMI_TDEST_VALS: $nmi_tdest_vals"
+        # Set the NMI_TDEST_VALS property on the axis_noc_high instance with quotes
+        set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]
+
+        # Format pin names dynamically based on index
+        set formatted_indexM [format "%02d" [expr {$new_low_num_nmi - 1}]]
+        set formatted_indexS [format "%02d" [expr {$new_low_num_nsi - 1}]]
+        set formatted_indexOut [format "%02d" $RP_number]
+        set master_inis_pin_intern "M${formatted_indexM}_INIS"
+        set slave_inis_pin_intern "S${formatted_indexS}_INIS"
+        set master_inis_pin_extern "M${formatted_indexOut}_INIS"
+        set slave_inis_pin_extern "S${formatted_indexOut}_INIS"
+
+        puts "$master_inis_pin_intern $slave_inis_pin_intern"
+        puts "$master_inis_pin_extern $slave_inis_pin_extern"
+
+        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern
+        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern
+
+        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$master_inis_pin_extern
+        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$slave_inis_pin_extern
+
+        set master_intf_net "axis_noc_low_${master_inis_pin_extern}_conn"
+        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/${master_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern]
+        set slave_intf_net "axis_noc_low_${slave_inis_pin_extern}_conn"
+        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/${slave_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern]
+
+        set master_intf_net "axis_noc_low_${master_inis_pin_extern}_connE"
+        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern] [get_bd_intf_pins /RP${i}/$master_inis_pin_extern]
+        set slave_intf_net "axis_noc_low_${slave_inis_pin_extern}_connE"
+        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern] [get_bd_intf_pins /RP${i}/$slave_inis_pin_extern]
+
+      } else {
+        puts "ERROR: Cannot update Static Region $i Too many NMI/NSI"
+        return
+      }
+
+    # update high for upper half of RP
+    } else {
+      set current_high_num_nmi [get_property CONFIG.NUM_NMI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]]
+      set current_high_num_nsi [get_property CONFIG.NUM_NSI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]]
+
+      set new_high_num_nmi [expr {$current_high_num_nmi + 1}]
+      set new_high_num_nsi [expr {$current_high_num_nsi + 1}]
+
+      #safty check
+      if {($new_high_num_nmi < 17) && ($new_high_num_nmi < 17)} {
+        # puts "Current High NUM_NMI: $current_high_num_nmi, Current High NUM_NSI: $current_high_num_nsi"
+        # puts "New High NUM_NMI: $new_high_num_nmi, New High NUM_NSI: $new_high_num_nsi"
+
+        # Apply the updated configuration with incremented values using -dict
+        set_property -dict [list \
+          CONFIG.NUM_NMI $new_high_num_nmi \
+          CONFIG.NUM_NSI $new_high_num_nsi \
+        ] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]        
+
+        # output steam: Format the number with zero-padding for zero index
+        set formatted_indexM [format "%02d" [expr {$new_high_num_nmi - 1}]]
+        set MINIS_name "M${formatted_indexM}_INIS"
+        set current_connectionsS [get_property CONFIG.CONNECTIONS [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/S00_AXIS]]
+        lappend current_connectionsS $MINIS_name {read_bw {500} write_bw {500}}
+        set_property -dict [list CONFIG.CONNECTIONS $current_connectionsS] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/S00_AXIS]
+        
+        # input stream: Format the number with zero-padding for zero index
+        set formatted_indexS [format "%02d" [expr {$new_high_num_nsi - 1}]]
+        set SINIS_name "S${formatted_indexS}_INIS"
+        set_property -dict [list CONFIG.CONNECTIONS {M00_INIS { write_bw {500} }}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/$SINIS_name] 
+
+        # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
+        set nmi_tdest_vals "," 
+        # +1 to skip itself 
+        set skip 0
+        set start 16
+        if {$i > 16} {
+          set skip 1
+        } else {
+          set start 17
+        }
+        #+1 to start from 1
+        for {set j $start} {$j < ($num_low + $num_high + 1 + 1)} {incr j} {
+          # skip itself
+          if { $j != $i} {
+            # Format the hex value with leading zeros
+            set formatted_hex [format "0x%08X" [expr {$j}]]
+
+            # Append each formatted hex value pair, separated by a comma
+            append nmi_tdest_vals "$formatted_hex $formatted_hex"
+
+            # Add a comma separator after each pair, except the last one
+            if { $j < ($num_low + $num_high + 1) } {
+              append nmi_tdest_vals ","
+            }
+          }
+        }
+        # puts "H NMI_TDEST_VALS: $nmi_tdest_vals"
+        # Set the NMI_TDEST_VALS property on the axis_noc_high instance with quotes
+        set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]
+
+        # Format pin names dynamically based on index
+        set formatted_indexM [format "%02d" [expr {$new_high_num_nmi - 1}]]
+        set formatted_indexS [format "%02d" [expr {$new_high_num_nsi - 1}]]
+        set formatted_indexOut [format "%02d" $RP_number]
+        set master_inis_pin_intern "M${formatted_indexM}_INIS"
+        set slave_inis_pin_intern "S${formatted_indexS}_INIS"
+        set master_inis_pin_extern "M${formatted_indexOut}_INIS"
+        set slave_inis_pin_extern "S${formatted_indexOut}_INIS"
+
+        puts "$master_inis_pin_intern $slave_inis_pin_intern"
+        puts "$master_inis_pin_extern $slave_inis_pin_extern"
+
+        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern
+        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern
+
+        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$master_inis_pin_extern
+        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$slave_inis_pin_extern
+
+        set master_intf_net "axis_noc_high_${master_inis_pin_extern}_conn"
+        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/${master_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern]
+        set slave_intf_net "axis_noc_high_${slave_inis_pin_extern}_conn"
+        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/${slave_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern]
+
+        set master_intf_net "axis_noc_high_${master_inis_pin_extern}_connE"
+        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern] [get_bd_intf_pins /RP${i}/$master_inis_pin_extern]
+        set slave_intf_net "axis_noc_high_${slave_inis_pin_extern}_connE"
+        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern] [get_bd_intf_pins /RP${i}/$slave_inis_pin_extern]
+
+      } else {
+        puts "ERROR: Cannot update Static Region $i Too many NMI/NSI"
+        return
+      }
+    }
+  }
+}
 
 proc connectRegions { nameHier RP_number } {
 
   if { $nameHier eq "" || $RP_number eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
-     return
+    catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
+    return
   }
 
   # RP name
@@ -545,21 +763,23 @@ proc connectRegions { nameHier RP_number } {
   set RP_Slice_dcpl "${nameHier}${RP_number}_dcpl"
 
   # Connect Static Region to RP 
-  #connect_bd_intf_net -intf_net static_region_MINI [get_bd_intf_pins /static_region/$master_inis_pin_extern] [get_bd_intf_pins /$RPname/S00_DFX_INI]
-  #connect_bd_intf_net -intf_net static_region_SINI [get_bd_intf_pins /static_region/$slave_inis_pin_extern] [get_bd_intf_pins /$RPname/M00_DFX_INI]
+  connect_bd_intf_net -intf_net static_region_MINI [get_bd_intf_pins /static_region/$master_inis_pin_extern] [get_bd_intf_pins /$RPname/S00_DFX_INI]
+  connect_bd_intf_net -intf_net static_region_SINI [get_bd_intf_pins /static_region/$slave_inis_pin_extern] [get_bd_intf_pins /$RPname/M00_DFX_INI]
 
   # decouple
-  #connect_bd_net -net dcpl [get_bd_pins /static_region/$RP_Slice_dcpl] [get_bd_pins /$RPname/decouple]
+  connect_bd_net -net dcpl [get_bd_pins /static_region/$RP_Slice_dcpl] [get_bd_pins /$RPname/decouple]
 
   # clk and reset pins
   connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins /static_region/slowest_sync_clk] [get_bd_pins /$RPname/aclk]
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins /static_region/peripheral_aresetn] [get_bd_pins /$RPname/aresetn]
 }
 
-#create_hier_cell_RPtop RP 3
+create_hier_cell_RPtop RP 3
 
 # updateStaticRegion RP 3
 
-connectRegions RP 3
+updateRPregions RP 3
+
+# connectRegions RP 3
 
 
