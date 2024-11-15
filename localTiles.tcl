@@ -106,83 +106,75 @@ proc createLocalRPStatic {parentName nameHier RP_number } {
   create_bd_pin -dir I /${parentName}/${nameHier}/rp_decouple
 
   # Loop to create and connect master and slave INIS pins for axis_noc based on num_nmi
-  for {set i 0} {$i < $num_low} {incr i} {
+  for {set i 0} {$i < $num_nmi} {incr i} {
     # Format pin names dynamically based on index
-    set formatted_index0 [format "%02d" $i]
-    set formatted_index1 [format "%02d" [expr {$i + 1}]]
-    set master_inis_pin "M${formatted_index1}_INIS"
-    set slave_inis_pin_intern "S${formatted_index0}_INIS"
-    set slave_inis_pin_extern "S${formatted_index1}_INIS"
+    set formatted_index_intern [format "%02d" $i]
+    set formatted_index_extern [format "%02d" [expr {$i + 1}]]
+
+    set master_inis_pin_intern "M${formatted_index_intern}_INIS"
+    set master_inis_pin_extern "M${formatted_index_extern}_INIS"
+    set slave_inis_pin_intern "S${formatted_index_intern}_INIS"
+    set slave_inis_pin_extern "S${formatted_index_extern}_INIS"
 
     # Create master and slave INIS interface pins dynamically
-    create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${RP_number}/${nameHier}/$master_inis_pin
-    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${RP_number}/${nameHier}/$slave_inis_pin_extern
+    create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /${parentName}//${nameHier}/$master_inis_pin_extern
+    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /${parentName}//${nameHier}/$slave_inis_pin_extern
     
     # Connect each master INIS pin to the corresponding axis_noc master interface pin
-    set master_intf_net "axis_noc_low_${master_inis_pin}_conn"
-    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/${master_inis_pin}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/$master_inis_pin]
+    set master_intf_net "axis_noc_${master_inis_pin_intern}_conn"
+    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /${parentName}//${nameHier}/axis_noc/${master_inis_pin_intern}] [get_bd_intf_pins /${parentName}//${nameHier}/$master_inis_pin_extern]
 
     # Connect each slave INIS pin to the corresponding axis_noc slave interface pin
-    set slave_intf_net "axis_noc_low_${slave_inis_pin_extern}_conn"
-    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/${slave_inis_pin_intern}] [get_bd_intf_pins /RP${RP_number}/${nameHier}/$slave_inis_pin_extern]
+    set slave_intf_net "axis_noc_${slave_inis_pin_intern}_conn"
+    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /${parentName}//${nameHier}/axis_noc/${slave_inis_pin_intern}] [get_bd_intf_pins /${parentName}//${nameHier}/$slave_inis_pin_extern]
   }
 
-#   # connect axis_switch_outputMux to axis_noc_low
-#   connect_bd_intf_net -intf_net axis_switch2low [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/M00_AXIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/S00_AXIS]
-#   # connect axis_noc_low to axis_noc_inputMux
-#   connect_bd_intf_net -intf_net axis_low2noc [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_low/M00_INIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/S00_INIS]
+  # connect switch and noc to decoupler rp_dfx
+  # Create interface pins
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 /${parentName}/${nameHier}/rp_sout2rp2n
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 /${parentName}/${nameHier}/rp_n2rp2sin
+  #connect path of input stream
+  connect_bd_intf_net -intf_net n2dcp [get_bd_intf_pins /${parentName}/${nameHier}/axis_noc/M00_AXIS] [get_bd_intf_pins /${parentName}/${nameHier}/dfx_decoupler_0/s_n2rp2sin]
+  connect_bd_intf_net -intf_net dcp2dfx [get_bd_intf_pins /${parentName}/${nameHier}/rp_n2rp2sin] [get_bd_intf_pins /${parentName}/${nameHier}/dfx_decoupler_0/rp_n2rp2sin]
+  #connect path of output stream
+  connect_bd_intf_net -intf_net dcp2n [get_bd_intf_pins /${parentName}/${nameHier}/dfx_decoupler_0/s_sout2rp2n] [get_bd_intf_pins /${parentName}/${nameHier}/axis_noc/S00_AXIS]
+  connect_bd_intf_net -intf_net dcp2dfx2 [get_bd_intf_pins /${parentName}/${nameHier}/rp_sout2rp2n] [get_bd_intf_pins /${parentName}/${nameHier}/dfx_decoupler_0/rp_sout2rp2n]
 
-#   # connect axis_switch_outputMux to axis_noc_high
-#   connect_bd_intf_net -intf_net axis_switch2high [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/M01_AXIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_high/S00_AXIS]
-#   # connect axis_noc_high to axis_noc_inputMux
-#   connect_bd_intf_net -intf_net axis_high2noc [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_high/M00_INIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/S01_INIS]
-
-#   # connect switch and noc to decoupler rp_dfx
-#   # Create interface pins
-#   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/rp_sout2rp2n
-#   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/rp_n2rp2sin
-#   #connect path of input stream
-#   connect_bd_intf_net -intf_net n2dcp [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/M00_AXIS] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/s_n2rp2sin]
-#   connect_bd_intf_net -intf_net dcp2dfx [get_bd_intf_pins /RP${RP_number}/${nameHier}/rp_n2rp2sin] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/rp_n2rp2sin]
-#   #connect path of output stream
-#   connect_bd_intf_net -intf_net dcp2n [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/s_sout2rp2n] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/S00_AXIS]
-#   connect_bd_intf_net -intf_net dcp2dfx2 [get_bd_intf_pins /RP${RP_number}/${nameHier}/rp_sout2rp2n] [get_bd_intf_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/rp_sout2rp2n]
-
-#   # Connect ctr and clk pins 
-#   connect_bd_net -net clk [get_bd_pins /RP${RP_number}/${nameHier}/rp_clk] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/sout2rp2n_aclk] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/n2rp2sin_aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_low/aclk0] [get_bd_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_inputMux/aclk0] [get_bd_pins /RP${RP_number}/${nameHier}/axis_noc_high/aclk0]
-#   connect_bd_net -net aresetn [get_bd_pins /RP${RP_number}/${nameHier}/rp_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/sout2rp2n_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/n2rp2sin_arstn] [get_bd_pins /RP${RP_number}/${nameHier}/axis_switch_outputMux/aresetn]
-#   connect_bd_net -net decouple [get_bd_pins /RP${RP_number}/${nameHier}/rp_decouple] [get_bd_pins /RP${RP_number}/${nameHier}/dfx_decoupler_0/decouple]
+  # Connect ctr and clk pins 
+  connect_bd_net -net clk [get_bd_pins /${parentName}/${nameHier}/rp_clk] [get_bd_pins /${parentName}/${nameHier}/dfx_decoupler_0/sout2rp2n_aclk] [get_bd_pins /${parentName}/${nameHier}/dfx_decoupler_0/n2rp2sin_aclk] [get_bd_pins /${parentName}/${nameHier}/axis_noc/aclk0] 
+  connect_bd_net -net aresetn [get_bd_pins /${parentName}/${nameHier}/rp_arstn] [get_bd_pins /${parentName}/${nameHier}/dfx_decoupler_0/sout2rp2n_arstn] [get_bd_pins /${parentName}/${nameHier}/dfx_decoupler_0/n2rp2sin_arstn] 
+  connect_bd_net -net decouple [get_bd_pins /${parentName}/${nameHier}/rp_decouple] [get_bd_pins /${parentName}/${nameHier}/dfx_decoupler_0/decouple]
 
 }
 
-proc create_hier_cell_RP_DFX { nameHier RP_number } {
+proc createLocalRPDFX {parentName nameHier RP_number } {
 
-  if { $nameHier eq "" || $RP_number eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP1_Static() - Empty argument(s)!"}
+  if { $parentName eq "" || $nameHier eq "" || $RP_number eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP1_DFX() - Empty argument(s)!"}
      return
   }
 
   # Create cell and set as current instance
-  set hier_obj [create_bd_cell -type hier /RP${RP_number}/$nameHier]
+  set hier_obj [create_bd_cell -type hier /${parentName}/$nameHier]
   current_bd_instance $hier_obj
 
   # Create interface pins
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inimm_rtl:1.0 /RP${RP_number}/${nameHier}/M00_DFX_INI
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inimm_rtl:1.0 /RP${RP_number}/${nameHier}/S00_DFX_INI
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/input_stream
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 /RP${RP_number}/${nameHier}/output_stream
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inimm_rtl:1.0 /${parentName}/${nameHier}/M00_DFX_INI
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inimm_rtl:1.0 /${parentName}/${nameHier}/S00_DFX_INI
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 /${parentName}/${nameHier}/input_stream
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 /${parentName}/${nameHier}/output_stream
 
   # Create pins
-  create_bd_pin -dir I -type clk /RP${RP_number}/${nameHier}/aclk
-  create_bd_pin -dir I -type rst /RP${RP_number}/${nameHier}/aresetn
+  create_bd_pin -dir I -type clk /${parentName}/${nameHier}/aclk
+  create_bd_pin -dir I -type rst /${parentName}/${nameHier}/aresetn
 
   # Create instance: rmBase_0, and set properties
-  set rmBase_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rmBase:1.1 /RP${RP_number}/${nameHier}/rmBase_0 ]
+  set rmBase_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rmBase:1.1 /${parentName}/${nameHier}/rmBase_0 ]
 
 ###########################################################################################################################################################################  
 
   # Create instance: axi_noc_0, and set properties
-  set axi_noc_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_noc:1.1 /RP${RP_number}/${nameHier}/axi_noc_0 ]
+  set axi_noc_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_noc:1.1 /${parentName}/${nameHier}/axi_noc_0 ]
   set_property -dict [list \
     CONFIG.MI_NAMES {} \
     CONFIG.MI_SIDEBAND_PINS {} \
@@ -194,41 +186,41 @@ proc create_hier_cell_RP_DFX { nameHier RP_number } {
   set_property -dict [ list \
    CONFIG.APERTURES {{0x201_8000_0000 1G}} \
    CONFIG.CATEGORY {pl} \
- ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/M00_AXI]
+ ] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/M00_AXI]
 
   set_property -dict [ list \
    CONFIG.CONNECTIONS {M00_INI {read_bw {500} write_bw {500}}} \
    CONFIG.DEST_IDS {} \
    CONFIG.NOC_PARAMS {} \
    CONFIG.CATEGORY {pl} \
- ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_AXI]
+ ] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/S00_AXI]
 
   set_property -dict [ list \
    CONFIG.CONNECTIONS {M00_AXI {read_bw {500} write_bw {500} read_avg_burst {4} write_avg_burst {4}}} \
- ] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_INI]
+ ] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/S00_INI]
 
   set_property -dict [ list \
    CONFIG.ASSOCIATED_BUSIF {M00_AXI:S00_AXI} \
- ] [get_bd_pins /RP${RP_number}/${nameHier}/axi_noc_0/aclk0]
+ ] [get_bd_pins /${parentName}/${nameHier}/axi_noc_0/aclk0]
 
 ###########################################################################################################################################################################  
 
   # Create instance: smartconnect_0, and set properties
-  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 /RP${RP_number}/${nameHier}/smartconnect_0 ]
+  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 /${parentName}/${nameHier}/smartconnect_0 ]
   set_property CONFIG.NUM_SI {1} $smartconnect_0
 
   # Create interface connections
-  connect_bd_intf_net -intf_net Conn1 [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/input_stream] [get_bd_intf_pins /RP${RP_number}/${nameHier}/input_stream]
-  connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/output_stream] [get_bd_intf_pins /RP${RP_number}/${nameHier}/output_stream]
-  connect_bd_intf_net -intf_net axi_noc_0_S00_AXI [get_bd_intf_pins /RP${RP_number}/${nameHier}/smartconnect_0/S00_AXI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/M00_AXI]
-  connect_bd_intf_net -intf_net axi_noc_0_S00_DFX_INI [get_bd_intf_pins /RP${RP_number}/${nameHier}/S00_DFX_INI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_INI]
-  connect_bd_intf_net -intf_net axi_noc_0_M00_DFX_INI [get_bd_intf_pins /RP${RP_number}/${nameHier}/M00_DFX_INI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/M00_INI]
-  connect_bd_intf_net -intf_net rmBase_0_m_axi_DATA_BUS_ADDR [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/m_axi_DATA_BUS_ADDR] [get_bd_intf_pins /RP${RP_number}/${nameHier}/axi_noc_0/S00_AXI]
-  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins /RP${RP_number}/${nameHier}/smartconnect_0/M00_AXI] [get_bd_intf_pins /RP${RP_number}/${nameHier}/rmBase_0/s_axi_CTRL_BUS]
+  connect_bd_intf_net -intf_net Conn1 [get_bd_intf_pins /${parentName}/${nameHier}/rmBase_0/input_stream] [get_bd_intf_pins /${parentName}/${nameHier}/input_stream]
+  connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins /${parentName}/${nameHier}/rmBase_0/output_stream] [get_bd_intf_pins /${parentName}/${nameHier}/output_stream]
+  connect_bd_intf_net -intf_net axi_noc_0_S00_AXI [get_bd_intf_pins /${parentName}/${nameHier}/smartconnect_0/S00_AXI] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/M00_AXI]
+  connect_bd_intf_net -intf_net axi_noc_0_S00_DFX_INI [get_bd_intf_pins /${parentName}/${nameHier}/S00_DFX_INI] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/S00_INI]
+  connect_bd_intf_net -intf_net axi_noc_0_M00_DFX_INI [get_bd_intf_pins /${parentName}/${nameHier}/M00_DFX_INI] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/M00_INI]
+  connect_bd_intf_net -intf_net rmBase_0_m_axi_DATA_BUS_ADDR [get_bd_intf_pins /${parentName}/${nameHier}/rmBase_0/m_axi_DATA_BUS_ADDR] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/S00_AXI]
+  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins /${parentName}/${nameHier}/smartconnect_0/M00_AXI] [get_bd_intf_pins /${parentName}/${nameHier}/rmBase_0/s_axi_CTRL_BUS]
 
   # Create port connections
-  connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins /RP${RP_number}/${nameHier}/aclk] [get_bd_pins /RP${RP_number}/${nameHier}/smartconnect_0/aclk] [get_bd_pins /RP${RP_number}/${nameHier}/axi_noc_0/aclk0] [get_bd_pins /RP${RP_number}/${nameHier}/rmBase_0/ap_clk]
-  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins /RP${RP_number}/${nameHier}/aresetn] [get_bd_pins /RP${RP_number}/${nameHier}/smartconnect_0/aresetn] [get_bd_pins /RP${RP_number}/${nameHier}/rmBase_0/ap_rst_n]
+  connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins /${parentName}/${nameHier}/aclk] [get_bd_pins /${parentName}/${nameHier}/smartconnect_0/aclk] [get_bd_pins /${parentName}/${nameHier}/axi_noc_0/aclk0] [get_bd_pins /${parentName}/${nameHier}/rmBase_0/ap_clk]
+  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins /${parentName}/${nameHier}/aresetn] [get_bd_pins /${parentName}/${nameHier}/smartconnect_0/aresetn] [get_bd_pins /${parentName}/${nameHier}/rmBase_0/ap_rst_n]
 
 }
 
@@ -273,51 +265,52 @@ proc createLocalTop { SLR_number RP_number } {
 
 ###########################################################################################################################################################################  
 
-#   #Loop to create and connect master and slave INIS pins for top level based on RP_number
-#   for {set i 0} {$i < ($RP_number - 1)} {incr i} {
-#     # Format pin names dynamically based on index
-#     set formatted_index [format "%02d" [expr {$i + 1}]]
-#     set master_inis_pin "M${formatted_index}_INIS"
-#     set slave_inis_pin "S${formatted_index}_INIS"
+  #Loop to create and connect master and slave INIS pins for top level based on RP_number
+  for {set i 0} {$i < ($RP_number - 1)} {incr i} {
+    # Format pin names dynamically based on index
+    set formatted_index [format "%02d" [expr {$i + 1}]]
 
-#     # Connect each master INIS pin to the corresponding axis_noc master interface pin
-#     set master_intf_net "static_${master_inis_pin}_conn"
-#     connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/${master_inis_pin}] [get_bd_intf_pins /$RPname/$master_inis_pin]
+    set master_inis_pin_intern "M${formatted_index}_INIS"
+    set master_inis_pin_extern "SLR${SLR_number}_M${formatted_index}_INIS"
+    set slave_inis_pin_intern "S${formatted_index}_INIS"
+    set slave_inis_pin_extern "SLR${SLR_number}_S${formatted_index}_INIS"
 
-#     # Connect each slave INIS pin to the corresponding axis_noc slave interface pin
-#     set slave_intf_net "static_${slave_inis_pin}_conn"
-#     connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/${slave_inis_pin}] [get_bd_intf_pins /$RPname/$slave_inis_pin]
-#   }
+    # Connect each master INIS pin to the corresponding axis_noc master interface pin
+    set master_intf_net "static_${master_inis_pin_extern}_conn"
+    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/${master_inis_pin_intern}] [get_bd_intf_pins /$RPname/$master_inis_pin_extern]
 
-#   # Connect decouple pins 
-#   connect_bd_net -net decouple [get_bd_pins /$RPname/decouple] [get_bd_pins /$RPname/$RPStaticName/rp_decouple] 
+    # Connect each slave INIS pin to the corresponding axis_noc slave interface pin
+    set slave_intf_net "static_${slave_inis_pin_extern}_conn"
+    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/${slave_inis_pin_intern}] [get_bd_intf_pins /$RPname/$slave_inis_pin_extern]
+  }
 
-# ###########################################################################################################################################################################  
+  # Connect decouple pins 
+  connect_bd_net -net decouple [get_bd_pins /$RPname/decouple] [get_bd_pins /$RPname/$RPStaticName/rp_decouple] 
 
-#   set RPDFXName "RP${RP_number}_DFX"
-#   create_hier_cell_RP_DFX $RPDFXName $RP_number
+###########################################################################################################################################################################  
 
-# ###########################################################################################################################################################################  
+  set RPDFXName "RPL${RP_number}_DFX"
+  createLocalRPDFX $RPname $RPDFXName $RP_number
 
-#   connect_bd_intf_net -intf_net S00_DFX_INI [get_bd_intf_pins /$RPname/S00_DFX_INI] [get_bd_intf_pins /$RPname/$RPDFXName/S00_DFX_INI]
-#   connect_bd_intf_net -intf_net M00_DFX_INI [get_bd_intf_pins /$RPname/M00_DFX_INI] [get_bd_intf_pins /$RPname/$RPDFXName/M00_DFX_INI]
+###########################################################################################################################################################################  
 
-#   connect_bd_intf_net -intf_net input_dfx2static [get_bd_intf_pins /$RPname/$RPStaticName/rp_n2rp2sin] [get_bd_intf_pins /$RPname/$RPDFXName/input_stream]
-#   connect_bd_intf_net -intf_net output_dfx2static [get_bd_intf_pins /$RPname/$RPStaticName/rp_sout2rp2n] [get_bd_intf_pins /$RPname/$RPDFXName/output_stream]
+  connect_bd_intf_net -intf_net S00_DFX_INI [get_bd_intf_pins /$RPname/SLR${SLR_number}_S00_DFX_INI] [get_bd_intf_pins /$RPname/$RPDFXName/S00_DFX_INI]
+  connect_bd_intf_net -intf_net M00_DFX_INI [get_bd_intf_pins /$RPname/SLR${SLR_number}_M00_DFX_INI] [get_bd_intf_pins /$RPname/$RPDFXName/M00_DFX_INI]
 
-#   # Connect clk and reset pins 
-#   connect_bd_net -net clk [get_bd_pins /$RPname/aclk] [get_bd_pins /$RPname/$RPStaticName/rp_clk] [get_bd_pins /$RPname/$RPDFXName/aclk] 
-#   connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/rp_arstn] [get_bd_pins /$RPname/$RPDFXName/aresetn] 
+  connect_bd_intf_net -intf_net input_dfx2static [get_bd_intf_pins /$RPname/$RPStaticName/rp_n2rp2sin] [get_bd_intf_pins /$RPname/$RPDFXName/input_stream]
+  connect_bd_intf_net -intf_net output_dfx2static [get_bd_intf_pins /$RPname/$RPStaticName/rp_sout2rp2n] [get_bd_intf_pins /$RPname/$RPDFXName/output_stream]
+
+  # Connect clk and reset pins 
+  connect_bd_net -net clk [get_bd_pins /$RPname/aclk] [get_bd_pins /$RPname/$RPStaticName/rp_clk] [get_bd_pins /$RPname/$RPDFXName/aclk] 
+  connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/rp_arstn] [get_bd_pins /$RPname/$RPDFXName/aresetn] 
 }
 
-proc updateStaticRegion { nameHier RP_number } {
+proc updateStaticRegion { SLR_number RP_number uniqueTileNumb } {
 
-  if { $nameHier eq "" || $RP_number eq "" } {
+  if { $SLR_number eq "" || $RP_number eq "" || $uniqueTileNumb eq "" } {
     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
     return
   }
-
-  set RPname "${nameHier}${RP_number}"
 
   ###########################################################################################################################################################################  
 
@@ -371,30 +364,30 @@ proc updateStaticRegion { nameHier RP_number } {
   # ###########################################################################################################################################################################  
 
   set formatted_index_dfx [format "%02d" $RP_number]
-  set master_inis_pin_extern "M${formatted_index_dfx}_DFX_INI"
-  set slave_inis_pin_extern "S${formatted_index_dfx}_DFX_INI"
+  set master_inis_pin_extern "SLR${SLR_number}_M${formatted_index_dfx}_DFX_INI"
+  set slave_inis_pin_extern "SLR${SLR_number}_S${formatted_index_dfx}_DFX_INI"
 
   # Create master and slave INIS interface pins dynamically
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inimm_rtl:1.0 /static_region/$master_inis_pin_extern
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inimm_rtl:1.0 /static_region/$slave_inis_pin_extern
 
   # Connect each master INIS pin to the corresponding axis_noc master interface pin
-  connect_bd_intf_net -intf_net "M_noc_cips2block_${RP_number}" [get_bd_intf_pins /static_region/axi_noc_cips/${MINI_name}] [get_bd_intf_pins /static_region/$master_inis_pin_extern]
+  connect_bd_intf_net -intf_net "M_noc_cips2block_${SLR_number}${RP_number}" [get_bd_intf_pins /static_region/axi_noc_cips/${MINI_name}] [get_bd_intf_pins /static_region/$master_inis_pin_extern]
   # Connect each slave INIS pin to the corresponding axis_noc slave interface pin
-  connect_bd_intf_net -intf_net "S_noc_cips2block_${RP_number}" [get_bd_intf_pins /static_region/axi_noc_cips/${SINI_name}] [get_bd_intf_pins /static_region/$slave_inis_pin_extern]
+  connect_bd_intf_net -intf_net "S_noc_cips2block_${SLR_number}${RP_number}" [get_bd_intf_pins /static_region/axi_noc_cips/${SINI_name}] [get_bd_intf_pins /static_region/$slave_inis_pin_extern]
 
   ###########################################################################################################################################################################  
 
-  # Create instance: RP2, and set properties
-  set RP_Slice "${nameHier}${RP_number}_slice"
+  # # Create instance: RP2, and set properties
+  set RP_Slice "SLR${SLR_number}_RP${RP_number}_slice"
   set $RP_Slice [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 /static_region/$RP_Slice ]  
-  set_property CONFIG.DIN_TO $RP_number [get_bd_cells /static_region/$RP_Slice]
+  set_property CONFIG.DIN_TO $uniqueTileNumb [get_bd_cells /static_region/$RP_Slice]
 
   # Create interface pins
   connect_bd_net [get_bd_pins /static_region/$RP_Slice/Din] [get_bd_pins /static_region/axi_decoupler/gpio_io_o]
 
   # Create pins externally from static region
-  set RP_Slice_dcpl "${nameHier}${RP_number}_dcpl"
+  set RP_Slice_dcpl "SLR${SLR_number}_RP${RP_number}_dcpl"
   create_bd_pin -dir O -from 0 -to 0 /static_region/$RP_Slice_dcpl
 
   # Connect decouple pins
@@ -402,211 +395,103 @@ proc updateStaticRegion { nameHier RP_number } {
 
 }
 
-proc updateRPregions { nameHier RP_number } {
-  if { $nameHier eq "" || $RP_number eq "" } {
+proc updateRPregions { SLR_number RP_number } {
+
+  if { $SLR_number eq "" || $RP_number eq "" } {
     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_RP() - Empty argument(s)!"}
     return
-  }
-
-  # Set num_low and num_high based on the value of RP_number
-  if { $RP_number < 17 } {
-    set num_low [expr {$RP_number - 1}]
-    set num_high 0
-  } else {
-    set num_low 15
-    set num_high [expr {$RP_number - 1 - 15}]
-  }
+  }  
 
   #do not update the the RP just created
   for {set i 1} {$i < $RP_number} {incr i} {
-  # for {set i 17} {$i < 18} {incr i}
-    puts "Updating RP Static Region $i"
+    # RP name
+    set RPname "SLR${SLR_number}_RPL${i}"
+    set RPStaticName "RPL${i}_static"
+    
+    puts "Updating RP: $RPname -> $RPStaticName"
 
-    #update low for lower half of RP
-    if { $RP_number < 17 } {
-      set current_low_num_nmi [get_property CONFIG.NUM_NMI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]]
-      set current_low_num_nsi [get_property CONFIG.NUM_NSI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]]      
+    set current_num_nmi [get_property CONFIG.NUM_NMI [get_bd_cells /$RPname/$RPStaticName/axis_noc]]
+    set current_num_nsi [get_property CONFIG.NUM_NSI [get_bd_cells /$RPname/$RPStaticName/axis_noc]]      
 
-      set new_low_num_nmi [expr {$current_low_num_nmi + 1}]
-      set new_low_num_nsi [expr {$current_low_num_nsi + 1}]
+    set new_num_nmi [expr {$current_num_nmi + 1}]
+    set new_num_nsi [expr {$current_num_nsi + 1}]
 
-      #safty check
-      if {($new_low_num_nmi < 17) && ($new_low_num_nsi < 17) || 1} {
-        # puts "Current Low NUM_NMI: $current_low_num_nmi, Current Low NUM_NSI: $current_low_num_nsi"
-        # puts "New Low NUM_NMI: $new_low_num_nmi, New Low NUM_NSI: $new_low_num_nsi"
+    puts "Current NUM_NMI: $current_num_nmi, Current NUM_NSI: $current_num_nsi"
+    puts "New NUM_NMI: $new_num_nmi, New NUM_NSI: $new_num_nsi"
 
-        # Apply the updated configuration with incremented values using -dict
-        set_property -dict [list \
-          CONFIG.NUM_NMI $new_low_num_nmi \
-          CONFIG.NUM_NSI $new_low_num_nsi \
-        ] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]        
+    # Apply the updated configuration with incremented values using -dict
+    set_property -dict [list \
+      CONFIG.NUM_NMI $new_num_nmi \
+      CONFIG.NUM_NSI $new_num_nsi \
+    ] [get_bd_cells /$RPname/$RPStaticName/axis_noc]        
 
-        # output steam: Format the number with zero-padding for zero index
-        set formatted_indexM [format "%02d" [expr {$new_low_num_nmi - 1}]]
-        set MINIS_name "M${formatted_indexM}_INIS"
-        set current_connectionsS [get_property CONFIG.CONNECTIONS [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/S00_AXIS]]
-        lappend current_connectionsS $MINIS_name {read_bw {500} write_bw {500}}
-        set_property -dict [list CONFIG.CONNECTIONS $current_connectionsS] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/S00_AXIS]
-        
-        # input stream: Format the number with zero-padding for zero index
-        set formatted_indexS [format "%02d" [expr {$new_low_num_nsi - 1}]]
-        set SINIS_name "S${formatted_indexS}_INIS"
-        set_property -dict [list CONFIG.CONNECTIONS {M00_INIS { write_bw {500} }}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/$SINIS_name] 
+    # output steam: Format the number with zero-padding for zero index
+    set formatted_indexM [format "%02d" [expr {$new_num_nmi - 1}]]
+    set MINIS_name "M${formatted_indexM}_INIS"
+    set current_connectionsS [get_property CONFIG.CONNECTIONS [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc/S00_AXIS]]
+    lappend current_connectionsS $MINIS_name {read_bw {500} write_bw {500}}
+    set_property -dict [list CONFIG.CONNECTIONS $current_connectionsS] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc/S00_AXIS]
+    
+    # input stream: Format the number with zero-padding for zero index
+    set formatted_indexS [format "%02d" [expr {$new_num_nsi - 1}]]
+    set SINIS_name "S${formatted_indexS}_INIS"
+    set_property -dict [list CONFIG.CONNECTIONS {M00_AXIS { read_bw {500} write_bw {500}}}] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc/$SINIS_name] 
 
-        # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
-        set nmi_tdest_vals "," 
-        # +1 to skip itself
-        set skip 0
-        if {$i < 17} {
-          set skip 1
+    # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
+    set nmi_tdest_vals "" 
+    # +1 to skip itself
+    set skip 1
+    # +1 to start from 1
+    for {set j 1} {$j < ($RP_number + $skip)} {incr j} {
+      # skip itself
+      if { $j != $i} {
+        # Format the hex value with leading zeros
+        set formatted_hex [format "0x%08X" [expr {$j}]]
+
+        # Append each formatted hex value pair, separated by a comma
+        append nmi_tdest_vals "$formatted_hex $formatted_hex"
+
+        # Add a comma separator after each pair, except the last one
+        if { $j < ($RP_number) } {
+          append nmi_tdest_vals ","
         }
-        # +1 to start from 1
-        for {set j 1} {$j < ($num_low + $skip + 1)} {incr j} {
-          # skip itself
-          if { $j != $i} {
-            # Format the hex value with leading zeros
-            set formatted_hex [format "0x%08X" [expr {$j}]]
-
-            # Append each formatted hex value pair, separated by a comma
-            append nmi_tdest_vals "$formatted_hex $formatted_hex"
-
-            # Add a comma separator after each pair, except the last one
-            if { $j < ($num_low + $skip) } {
-              append nmi_tdest_vals ","
-            }
-          }
-        }
-        # puts "L NMI_TDEST_VALS: $nmi_tdest_vals"
-        # Set the NMI_TDEST_VALS property on the axis_noc_high instance with quotes
-        set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_low]
-
-        # Format pin names dynamically based on index
-        set formatted_indexM [format "%02d" [expr {$new_low_num_nmi - 1}]]
-        set formatted_indexS [format "%02d" [expr {$new_low_num_nsi - 1}]]
-        set formatted_indexOut [format "%02d" $RP_number]
-        set master_inis_pin_intern "M${formatted_indexM}_INIS"
-        set slave_inis_pin_intern "S${formatted_indexS}_INIS"
-        set master_inis_pin_extern "M${formatted_indexOut}_INIS"
-        set slave_inis_pin_extern "S${formatted_indexOut}_INIS"
-
-        puts "$master_inis_pin_intern $slave_inis_pin_intern"
-        puts "$master_inis_pin_extern $slave_inis_pin_extern"
-
-        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern
-        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern
-
-        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$master_inis_pin_extern
-        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$slave_inis_pin_extern
-
-        set master_intf_net "axis_noc_low_${master_inis_pin_extern}_conn"
-        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/${master_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern]
-        set slave_intf_net "axis_noc_low_${slave_inis_pin_extern}_conn"
-        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_low/${slave_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern]
-
-        set master_intf_net "axis_noc_low_${master_inis_pin_extern}_connE"
-        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern] [get_bd_intf_pins /RP${i}/$master_inis_pin_extern]
-        set slave_intf_net "axis_noc_low_${slave_inis_pin_extern}_connE"
-        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern] [get_bd_intf_pins /RP${i}/$slave_inis_pin_extern]
-
-      } else {
-        puts "ERROR: Cannot update Static Region $i Too many NMI/NSI"
-        return
-      }
-
-    # update high for upper half of RP
-    } else {
-      set current_high_num_nmi [get_property CONFIG.NUM_NMI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]]
-      set current_high_num_nsi [get_property CONFIG.NUM_NSI [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]]
-
-      set new_high_num_nmi [expr {$current_high_num_nmi + 1}]
-      set new_high_num_nsi [expr {$current_high_num_nsi + 1}]
-
-      #safty check
-      if {($new_high_num_nmi < 17) && ($new_high_num_nmi < 17)} {
-        # puts "Current High NUM_NMI: $current_high_num_nmi, Current High NUM_NSI: $current_high_num_nsi"
-        # puts "New High NUM_NMI: $new_high_num_nmi, New High NUM_NSI: $new_high_num_nsi"
-
-        # Apply the updated configuration with incremented values using -dict
-        set_property -dict [list \
-          CONFIG.NUM_NMI $new_high_num_nmi \
-          CONFIG.NUM_NSI $new_high_num_nsi \
-        ] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]        
-
-        # output steam: Format the number with zero-padding for zero index
-        set formatted_indexM [format "%02d" [expr {$new_high_num_nmi - 1}]]
-        set MINIS_name "M${formatted_indexM}_INIS"
-        set current_connectionsS [get_property CONFIG.CONNECTIONS [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/S00_AXIS]]
-        lappend current_connectionsS $MINIS_name {read_bw {500} write_bw {500}}
-        set_property -dict [list CONFIG.CONNECTIONS $current_connectionsS] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/S00_AXIS]
-        
-        # input stream: Format the number with zero-padding for zero index
-        set formatted_indexS [format "%02d" [expr {$new_high_num_nsi - 1}]]
-        set SINIS_name "S${formatted_indexS}_INIS"
-        set_property -dict [list CONFIG.CONNECTIONS {M00_INIS { write_bw {500} }}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/$SINIS_name] 
-
-        # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
-        set nmi_tdest_vals "," 
-        # +1 to skip itself 
-        set skip 0
-        set start 16
-        if {$i > 16} {
-          set skip 1
-        } else {
-          set start 17
-        }
-        #+1 to start from 1
-        for {set j $start} {$j < ($num_low + $num_high + 1 + 1)} {incr j} {
-          # skip itself
-          if { $j != $i} {
-            # Format the hex value with leading zeros
-            set formatted_hex [format "0x%08X" [expr {$j}]]
-
-            # Append each formatted hex value pair, separated by a comma
-            append nmi_tdest_vals "$formatted_hex $formatted_hex"
-
-            # Add a comma separator after each pair, except the last one
-            if { $j < ($num_low + $num_high + 1) } {
-              append nmi_tdest_vals ","
-            }
-          }
-        }
-        # puts "H NMI_TDEST_VALS: $nmi_tdest_vals"
-        # Set the NMI_TDEST_VALS property on the axis_noc_high instance with quotes
-        set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /RP${i}/${nameHier}${i}_static/axis_noc_high]
-
-        # Format pin names dynamically based on index
-        set formatted_indexM [format "%02d" [expr {$new_high_num_nmi - 1}]]
-        set formatted_indexS [format "%02d" [expr {$new_high_num_nsi - 1}]]
-        set formatted_indexOut [format "%02d" $RP_number]
-        set master_inis_pin_intern "M${formatted_indexM}_INIS"
-        set slave_inis_pin_intern "S${formatted_indexS}_INIS"
-        set master_inis_pin_extern "M${formatted_indexOut}_INIS"
-        set slave_inis_pin_extern "S${formatted_indexOut}_INIS"
-
-        puts "$master_inis_pin_intern $slave_inis_pin_intern"
-        puts "$master_inis_pin_extern $slave_inis_pin_extern"
-
-        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern
-        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern
-
-        create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$master_inis_pin_extern
-        create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /RP${i}/$slave_inis_pin_extern
-
-        set master_intf_net "axis_noc_high_${master_inis_pin_extern}_conn"
-        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/${master_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern]
-        set slave_intf_net "axis_noc_high_${slave_inis_pin_extern}_conn"
-        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/axis_noc_high/${slave_inis_pin_intern}] [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern]
-
-        set master_intf_net "axis_noc_high_${master_inis_pin_extern}_connE"
-        connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$master_inis_pin_extern] [get_bd_intf_pins /RP${i}/$master_inis_pin_extern]
-        set slave_intf_net "axis_noc_high_${slave_inis_pin_extern}_connE"
-        connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /RP${i}/${nameHier}${i}_static/$slave_inis_pin_extern] [get_bd_intf_pins /RP${i}/$slave_inis_pin_extern]
-
-      } else {
-        puts "ERROR: Cannot update Static Region $i Too many NMI/NSI"
-        return
       }
     }
+    puts "L NMI_TDEST_VALS: $nmi_tdest_vals"
+    # Set the NMI_TDEST_VALS property on the axis_noc_high instance with quotes
+    set_property -dict [list CONFIG.NMI_TDEST_VALS "$nmi_tdest_vals"] [get_bd_cells /$RPname/$RPStaticName/axis_noc]
+
+    # Format pin names dynamically based on index
+    set formatted_indexM [format "%02d" [expr {$new_num_nmi - 1}]]
+    set formatted_indexS [format "%02d" [expr {$new_num_nsi - 1}]]
+    set formatted_indexOut [format "%02d" $RP_number]
+    set master_inis_pin_intern "M${formatted_indexM}_INIS"
+    set slave_inis_pin_intern "S${formatted_indexS}_INIS"
+    set master_inis_pin_extern "M${formatted_indexOut}_INIS"
+    set slave_inis_pin_extern "S${formatted_indexOut}_INIS"
+    set master_inis_pin_extern_extern "SLR${SLR_number}_M${formatted_indexOut}_INIS"
+    set slave_inis_pin_extern_extern "SLR${SLR_number}_S${formatted_indexOut}_INIS"
+
+    # puts "$master_inis_pin_intern $slave_inis_pin_intern"
+    # puts "$master_inis_pin_extern $slave_inis_pin_extern"
+    # puts "$master_inis_pin_extern_extern $slave_inis_pin_extern_extern"
+
+    create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /$RPname/$RPStaticName/$master_inis_pin_extern
+    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /$RPname/$RPStaticName/$slave_inis_pin_extern
+
+    create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:inis_rtl:1.0 /$RPname/$master_inis_pin_extern_extern
+    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:inis_rtl:1.0 /$RPname/$slave_inis_pin_extern_extern
+
+    set master_intf_net "axis_noc_${SLR_number}${master_inis_pin_extern}_conn"
+    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc/${master_inis_pin_intern}] [get_bd_intf_pins /$RPname/$RPStaticName/$master_inis_pin_extern]
+    set slave_intf_net "axis_noc_${SLR_number}${slave_inis_pin_extern}_conn"
+    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc/${slave_inis_pin_intern}] [get_bd_intf_pins /$RPname/$RPStaticName/$slave_inis_pin_extern]
+
+    set master_intf_net "axis_noc_${SLR_number}${master_inis_pin_extern}_connE"
+    connect_bd_intf_net -intf_net $master_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/$master_inis_pin_extern] [get_bd_intf_pins /$RPname/$master_inis_pin_extern_extern]
+    set slave_intf_net "axis_noc_${SLR_number}${slave_inis_pin_extern}_connE"
+    connect_bd_intf_net -intf_net $slave_intf_net [get_bd_intf_pins /$RPname/$RPStaticName/$slave_inis_pin_extern] [get_bd_intf_pins /$RPname/$slave_inis_pin_extern_extern]
+    
   }
 }
 
@@ -618,52 +503,56 @@ proc connectRegions { SLR_number RP_number } {
   }
 
   # RP name
-  set RPname "SLR${SLR_number}_RP${RP_number}"
+  set RPname "SLR${SLR_number}_RPL${RP_number}"
 
-  # Names of Static Region Pins
-  # INI Pins
+  # Names of Static Region INI Pins
+  set master_inis_pin_RP "SLR${SLR_number}_M00_DFX_INI"
+  set slave_inis_pin_RP "SLR${SLR_number}_S00_DFX_INI"
+
   set formatted_index_dfx [format "%02d" $RP_number]
-  set master_inis_pin_extern "M${formatted_index_dfx}_DFX_INI"
-  set slave_inis_pin_extern "S${formatted_index_dfx}_DFX_INI"
-  # Decouple Pins
-  set RP_Slice_dcpl "${nameHier}${RP_number}_dcpl"
-
+  set master_inis_pin_static "SLR${SLR_number}_M${formatted_index_dfx}_DFX_INI"
+  set slave_inis_pin_static "SLR${SLR_number}_S${formatted_index_dfx}_DFX_INI"
+  
   # Connect Static Region to RP 
-  connect_bd_intf_net -intf_net "static_region_MINI_${RP_number}" [get_bd_intf_pins /static_region/$master_inis_pin_extern] [get_bd_intf_pins /$RPname/S00_DFX_INI]
-  connect_bd_intf_net -intf_net "static_region_SINI_${RP_number}" [get_bd_intf_pins /static_region/$slave_inis_pin_extern] [get_bd_intf_pins /$RPname/M00_DFX_INI]
+  connect_bd_intf_net -intf_net "static_region_MINI_${SLR_number}${RP_number}" [get_bd_intf_pins /static_region/$master_inis_pin_static] [get_bd_intf_pins /$RPname/$slave_inis_pin_RP]
+  connect_bd_intf_net -intf_net "static_region_SINI_${SLR_number}${RP_number}" [get_bd_intf_pins /static_region/$slave_inis_pin_static] [get_bd_intf_pins /$RPname/$master_inis_pin_RP]
 
-  # decouple
-  connect_bd_net -net "dcpl_${RP_number}" [get_bd_pins /static_region/$RP_Slice_dcpl] [get_bd_pins /$RPname/decouple]
+  # Decouple Pins
+  set RP_Slice_dcpl "SLR${SLR_number}_RP${RP_number}_dcpl"
+  connect_bd_net -net "dcpl_${SLR_number}${RP_number}" [get_bd_pins /static_region/$RP_Slice_dcpl] [get_bd_pins /$RPname/decouple]
 
   # clk and reset pins
   connect_bd_net -net clk_wizard_0_clk_out1 [get_bd_pins /static_region/slowest_sync_clk] [get_bd_pins /$RPname/aclk]
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins /static_region/peripheral_aresetn] [get_bd_pins /$RPname/aresetn]
 
-  # #connect
-  # for {set i 1} {$i < ($RP_number)} {incr i} {
-  #   # Format pin names dynamically based on index
-  #   set formatted_indexNew [format "%02d" [expr {$i}]]
-  #   set formatted_indexOld [format "%02d" [expr {$RP_number}]]
+  #connect
+  for {set i 1} {$i < ($RP_number)} {incr i} {
+    # RP old name
+    set RPOldName "SLR${SLR_number}_RPL${i}"
 
-  #   set master_inis_pin_new "M${formatted_indexNew}_INIS"
-  #   set slave_inis_pin_new "S${formatted_indexNew}_INIS"
-  #   set master_inis_pin_old "M${formatted_indexOld}_INIS"
-  #   set slave_inis_pin_old "S${formatted_indexOld}_INIS"
+    # Format pin names dynamically based on index
+    set formatted_indexNew [format "%02d" [expr {$i}]]
+    set formatted_indexOld [format "%02d" [expr {$RP_number}]]
 
-  #   # puts "$master_inis_pin_new $slave_inis_pin_new $master_inis_pin_old $slave_inis_pin_old"
+    set master_inis_pin_new "SLR${SLR_number}_M${formatted_indexNew}_INIS"
+    set slave_inis_pin_new  "SLR${SLR_number}_S${formatted_indexNew}_INIS"
+    set master_inis_pin_old "SLR${SLR_number}_M${formatted_indexOld}_INIS"
+    set slave_inis_pin_old "SLR${SLR_number}_S${formatted_indexOld}_INIS"
 
-  #   connect_bd_intf_net -intf_net "stream_${RP_number}_2_${i}" [get_bd_intf_pins /$RPname/$master_inis_pin_new] [get_bd_intf_pins /${nameHier}${i}/$slave_inis_pin_old]
-  #   connect_bd_intf_net -intf_net "stream_${i}_2_${RP_number}" [get_bd_intf_pins /${nameHier}${i}/$master_inis_pin_old] [get_bd_intf_pins /$RPname/$slave_inis_pin_new]
-  # }
+    # puts "$master_inis_pin_new $slave_inis_pin_new $master_inis_pin_old $slave_inis_pin_old"
+
+    connect_bd_intf_net -intf_net "stream${SLR_number}_${RP_number}_2_${i}" [get_bd_intf_pins /$RPname/$master_inis_pin_new] [get_bd_intf_pins /$RPOldName/$slave_inis_pin_old]
+    connect_bd_intf_net -intf_net "stream${SLR_number}_${i}_2_${RP_number}" [get_bd_intf_pins /$RPOldName/$master_inis_pin_old] [get_bd_intf_pins /$RPname/$slave_inis_pin_new]
+  }
 }
 
 createLocalTop 0 3
 
-# updateStaticRegion RP 3
+updateStaticRegion 0 3 3
 
-# updateRPregions RP 3
+updateRPregions 0 3
 
-# connectRegions RP 3
+connectRegions 0 3
 
 
 # # Define the range of values for RP_number (for example, 1 to 3)
