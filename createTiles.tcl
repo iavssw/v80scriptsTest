@@ -296,10 +296,19 @@ proc createRPDFX {parentName nameHier RP_number } {
 
   set_property -dict [ list \
    CONFIG.CONNECTIONS {M00_AXI {read_bw {500} write_bw {500} read_avg_burst {4} write_avg_burst {4}}} \
+   CONFIG.INI_STRATEGY {load} \
   ] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/S00_INI]
 
   # AXI-MM
   # set AXI-MM BW here?
+  set_property -dict [ list \
+    CONFIG.INI_STRATEGY {driver} \
+  ] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/M00_INI]
+
+  set_property -dict [ list \
+    CONFIG.INI_STRATEGY {driver} \
+  ] [get_bd_intf_pins /${parentName}/${nameHier}/axi_noc_0/M01_INI]
+
   set_property -dict [ list \
    CONFIG.CONNECTIONS {M00_INI {read_bw {500} write_bw {500}}} \
    CONFIG.DEST_IDS {} \
@@ -444,6 +453,10 @@ proc createLocalTop { RP_number } {
   # Connect clk and reset pins 
   connect_bd_net -net clk [get_bd_pins /$RPname/aclk] [get_bd_pins /$RPname/$RPStaticName/s_clk] [get_bd_pins /$RPname/$RPDFXName/rp_aclk] 
   connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/s_arstn] [get_bd_pins /$RPname/$RPDFXName/rp_aresetn] 
+
+  ###########################################################################################################################################################################
+
+  
 }
 
 proc updateStaticRegion { RP_number } {
@@ -583,7 +596,7 @@ proc updateRPregions { RP_number } {
     set formatted_indexM [format "%02d" [expr {$new_num_nmi - 1}]]
     set MINIS_name "M${formatted_indexM}_INIS"
     set current_connectionsS [get_property CONFIG.CONNECTIONS [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc0/S00_AXIS]]
-    lappend current_connectionsS $MINIS_name {read_bw {500} write_bw {500}}
+    lappend current_connectionsS $MINIS_name { write_bw {500}}
 
     # update nocs
     set_property -dict [list CONFIG.CONNECTIONS $current_connectionsS] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc0/S00_AXIS]
@@ -592,8 +605,8 @@ proc updateRPregions { RP_number } {
     # input stream: Format the number with zero-padding for zero index
     set formatted_indexS [format "%02d" [expr {$new_num_nsi - 1}]]
     set SINIS_name "S${formatted_indexS}_INIS"
-    set_property -dict [list CONFIG.CONNECTIONS {M00_AXIS { read_bw {500} write_bw {500}}}] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc0/$SINIS_name]
-    set_property -dict [list CONFIG.CONNECTIONS {M00_AXIS { read_bw {500} write_bw {500}}}] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc1/$SINIS_name] 
+    set_property -dict [list CONFIG.CONNECTIONS {M00_AXIS { write_bw {500}}}] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc0/$SINIS_name]
+    set_property -dict [list CONFIG.CONNECTIONS {M00_AXIS { write_bw {500}}}] [get_bd_intf_pins /$RPname/$RPStaticName/axis_noc1/$SINIS_name] 
 
     # Initialize the NMI_TDEST_VALS list with values starting from 1 "," is for M00_INIS
     set nmi_tdest_vals "" 
@@ -730,20 +743,19 @@ proc connectRegions { RP_number } {
   }
 }
 
-createLocalTop 3
-updateStaticRegion 3
-updateRPregions 3
-connectRegions 3
+createLocalTop 4
+# updateStaticRegion 4
+# updateRPregions 4
+# connectRegions 4
 
 # # Define the range of values for RP_number (for example, 1 to 3)
-# set max_value 27
-
+# set max_value 3
 # # Loop through each value and make function calls
 # for {set i 1} {$i <= $max_value} {incr i} {
-#     create_hier_cell_RPtop RP $i
-#     updateStaticRegion RP $i
-#     updateRPregions RP $i
-#     connectRegions RP $i
+#     createLocalTop $i
+#     updateStaticRegion $i
+#     updateRPregions $i
+#     connectRegions $i
 # }
 
 
