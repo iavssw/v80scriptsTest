@@ -455,8 +455,19 @@ proc createLocalTop { RP_number } {
   connect_bd_net -net aresetn [get_bd_pins /$RPname/aresetn] [get_bd_pins /$RPname/$RPStaticName/s_arstn] [get_bd_pins /$RPname/$RPDFXName/rp_aresetn] 
 
   ###########################################################################################################################################################################
+  # startgroup
+  # set_param bd.validation.enabled false
+  # set curdesign [current_bd_design]
+  # create_bd_design -cell [get_bd_cells /$RPDFXName/$RPDFXName] $RPDFXName
 
-  
+  # current_bd_design $curdesign
+  # set new_cell [create_bd_cell -type container -reference $RPDFXName $RPname/RP4_DFX_temp]
+
+  # replace_bd_cell [get_bd_cells /$RPname/$RPDFXName] $new_cell
+  # delete_bd_objs  [get_bd_cells /$RPname/$RPDFXName]
+  # set_property name $RPDFXName $new_cell
+  # set_param bd.validation.enabled true
+  # endgroup
 }
 
 proc updateStaticRegion { RP_number } {
@@ -744,9 +755,10 @@ proc connectRegions { RP_number } {
 }
 
 createLocalTop 4
-# updateStaticRegion 4
-# updateRPregions 4
-# connectRegions 4
+updateStaticRegion 4
+updateRPregions 4
+connectRegions 4
+# validateAndDFXsetup 4
 
 # # Define the range of values for RP_number (for example, 1 to 3)
 # set max_value 3
